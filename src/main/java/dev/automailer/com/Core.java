@@ -9,10 +9,11 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.*;
 import java.util.List;
-import java.util.Objects;
-import java.util.Properties;
+import java.util.concurrent.*;
 
 public class Core extends JFrame {
 
@@ -21,6 +22,7 @@ public class Core extends JFrame {
     private JTextArea txtMessage;
     private JTextField txtEmail;
     private JPasswordField txtPassword;
+    private JProgressBar progressBar;
 
     public Core() {
         createUI();
@@ -28,7 +30,7 @@ public class Core extends JFrame {
 
     private void createUI() {
         setTitle("Automatsko slanje mailova - Marin Dujmović");
-        setSize(500, 400);
+        setSize(600, 500);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
@@ -106,6 +108,13 @@ public class Core extends JFrame {
         gbc.gridwidth = 1;
         panel.add(btnSend, gbc);
 
+        progressBar = new JProgressBar();
+        progressBar.setStringPainted(true);
+        gbc.gridx = 0;
+        gbc.gridy = 6;
+        gbc.gridwidth = 3;
+        panel.add(progressBar, gbc);
+
         add(panel);
 
         btnBrowse.addActionListener(e -> {
@@ -123,64 +132,139 @@ public class Core extends JFrame {
             String filePath = txtFilePath.getText();
             String subject = txtSubject.getText();
             String messageBody = txtMessage.getText();
-            List<String> sentEmails = sendEmailsFromFile(email, password, filePath, subject, messageBody);
 
-            if (!sentEmails.isEmpty()) {
-                txtSubject.setText("");
-                txtMessage.setText("");
-                showSentEmailsDialog(sentEmails);
-            }
+            new Thread(() -> {
+                try {
+                    Session session = authenticate(email, password);
+                    List<String> sentEmails = sendEmailsFromFile(session, email, filePath, subject, messageBody);
+
+                    SwingUtilities.invokeLater(() -> {
+                        if (!sentEmails.isEmpty()) {
+                            txtSubject.setText("");
+                            txtMessage.setText("");
+                            showSentEmailsDialog(sentEmails);
+                        }
+                        progressBar.setValue(0);  // Reset progress bar
+                    });
+                } catch (Exception ex) {
+                    ex.fillInStackTrace();
+                    SwingUtilities.invokeLater(() -> showErrorDialog(ex));
+                }
+            }).start();
         });
 
+        // Set a modern look and feel
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception ex) {
-            ex.fillInStackTrace();
+            showErrorDialog(ex);
         }
     }
 
-    private List<String> sendEmailsFromFile(String email, String password, String filePath, String subject, String messageBody) {
-        List<String> sentEmails = new ArrayList<>();
-        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
-            String recipient;
-            while ((recipient = br.readLine()) != null) {
-                sendEmail(email, password, recipient, subject, messageBody);
-                sentEmails.add(recipient);
-            }
-        } catch (IOException e) {
-            e.fillInStackTrace();
-        }
-        return sentEmails;
-    }
-
-    private void sendEmail(String username, String password, String recipient, String subject, String messageBody) {
+    private Session authenticate(String email, String password) throws MessagingException {
         Properties props = new Properties();
         props.put("mail.smtp.auth", "true");
         props.put("mail.smtp.starttls.enable", "true");
         props.put("mail.smtp.host", "smtp.gmail.com");
         props.put("mail.smtp.port", "587");
 
-        Session session = Session.getInstance(props,
-                new javax.mail.Authenticator() {
-                    protected PasswordAuthentication getPasswordAuthentication() {
-                        return new PasswordAuthentication(username, password);
+        Session session = Session.getInstance(props, new javax.mail.Authenticator() {
+            protected PasswordAuthentication getPasswordAuthentication() {
+                return new PasswordAuthentication(email, password);
+            }
+        });
+
+        // Test the authentication
+        Transport transport = session.getTransport("smtp");
+        transport.connect("smtp.gmail.com", email, password);
+        transport.close();
+
+        return session;
+    }
+
+    private List<String> sendEmailsFromFile(Session session, String email, String filePath, String subject, String messageBody) {
+        List<String> sentEmails = new ArrayList<>();
+        ExecutorService executor = Executors.newFixedThreadPool(10);
+
+        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
+            String recipient;
+            List<Future<?>> futures = new ArrayList<>();
+            List<String> allEmails = new ArrayList<>();
+            while ((recipient = br.readLine()) != null) {
+                allEmails.add(recipient);
+            }
+
+            SwingUtilities.invokeLater(() -> {
+                progressBar.setMaximum(allEmails.size());
+                progressBar.setValue(0);
+            });
+
+            for (String recipientEmail : allEmails) {
+                futures.add(executor.submit(() -> {
+                    try {
+                        sendEmail(session, email, recipientEmail, subject, messageBody);
+                        synchronized (sentEmails) {
+                            sentEmails.add(recipientEmail);
+                            SwingUtilities.invokeLater(() -> progressBar.setValue(sentEmails.size()));
+                        }
+                    } catch (Exception e) {
+                        e.fillInStackTrace();
+                        SwingUtilities.invokeLater(() -> showErrorDialog(e));
                     }
-                });
+                }));
+            }
 
-        try {
-            Message message = new MimeMessage(session);
-            message.setFrom(new InternetAddress(username));
-            message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(recipient));
-            message.setSubject(subject);
-            message.setText(messageBody);
+            for (Future<?> future : futures) {
+                try {
+                    future.get();  // wait for all tasks to complete
+                } catch (ExecutionException | InterruptedException e) {
+                    e.fillInStackTrace();
+                    SwingUtilities.invokeLater(() -> showErrorDialog(e));
+                }
+            }
 
-            Transport.send(message);
-
-            System.out.println("Email poslan na: " + recipient);
-
-        } catch (MessagingException e) {
+        } catch (IOException e) {
             e.fillInStackTrace();
+            SwingUtilities.invokeLater(() -> showErrorDialog(e));
+        } finally {
+            executor.shutdown();
+            try {
+                if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
+                    executor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                executor.shutdownNow();
+                SwingUtilities.invokeLater(() -> showErrorDialog(e));
+            }
         }
+        return sentEmails;
+    }
+
+    private void sendEmail(Session session, String fromEmail, String recipient, String subject, String messageBody) throws MessagingException {
+        Message message = new MimeMessage(session);
+        message.setFrom(new InternetAddress(fromEmail));
+        message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(recipient));
+        message.setSubject(subject);
+        message.setText(messageBody);
+
+        Transport.send(message);
+        System.out.println("Email sent to: " + recipient);
+    }
+
+    private void showErrorDialog(Throwable throwable) {
+        JDialog dialog = new JDialog(this, "Error", true);
+        dialog.setSize(500, 300);
+        dialog.setLocationRelativeTo(this);
+
+        JTextArea textArea = new JTextArea();
+        textArea.setEditable(false);
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        throwable.printStackTrace(pw);
+        textArea.setText(sw.toString());
+
+        dialog.add(new JScrollPane(textArea));
+        dialog.setVisible(true);
     }
 
     private void showSentEmailsDialog(List<String> sentEmails) {
