@@ -28,15 +28,17 @@ public class Core extends JFrame {
 
     private void createUI() {
         setTitle("Automatsko slanje mailova - Marin Dujmović");
-        setSize(600, 600);
+        setSize(500, 400);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
         setIconImage(new ImageIcon(Objects.requireNonNull(getClass().getResource("/logo.png"))).getImage());
 
         JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(5, 5, 5, 5);
 
         JLabel lblEmail = new JLabel("Email:");
         gbc.gridx = 0;
@@ -58,7 +60,7 @@ public class Core extends JFrame {
         gbc.gridy = 1;
         panel.add(txtPassword, gbc);
 
-        JLabel lblFilePath = new JLabel("Put do adresa:");
+        JLabel lblFilePath = new JLabel("Popis adresa:");
         gbc.gridx = 0;
         gbc.gridy = 2;
         panel.add(lblFilePath, gbc);
@@ -89,10 +91,13 @@ public class Core extends JFrame {
         panel.add(lblMessage, gbc);
 
         txtMessage = new JTextArea(5, 20);
+        txtMessage.setLineWrap(true);
+        txtMessage.setWrapStyleWord(true);
         JScrollPane scrollPane = new JScrollPane(txtMessage);
         gbc.gridx = 1;
         gbc.gridy = 4;
         gbc.gridwidth = 2;
+        gbc.fill = GridBagConstraints.BOTH;
         panel.add(scrollPane, gbc);
 
         JButton btnSend = new JButton("Posalji mail");
@@ -126,6 +131,12 @@ public class Core extends JFrame {
                 showSentEmailsDialog(sentEmails);
             }
         });
+
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception ex) {
+            ex.fillInStackTrace();
+        }
     }
 
     private List<String> sendEmailsFromFile(String email, String password, String filePath, String subject, String messageBody) {
@@ -176,6 +187,7 @@ public class Core extends JFrame {
         JFrame frame = new JFrame("Poslani mailovi");
         frame.setSize(300, 200);
         frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        frame.setLocationRelativeTo(null);
 
         JTextArea textArea = new JTextArea();
         textArea.setEditable(false);
