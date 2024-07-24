@@ -23,6 +23,7 @@ public class Core extends JFrame {
     private JTextField txtEmail;
     private JPasswordField txtPassword;
     private JProgressBar progressBar;
+    private Session session;
 
     public Core() {
         createUI();
@@ -135,7 +136,7 @@ public class Core extends JFrame {
 
             new Thread(() -> {
                 try {
-                    Session session = authenticate(email, password);
+                    session = authenticate(email, password);
                     List<String> sentEmails = sendEmailsFromFile(session, email, filePath, subject, messageBody);
 
                     SwingUtilities.invokeLater(() -> {
@@ -207,9 +208,10 @@ public class Core extends JFrame {
                             sentEmails.add(recipientEmail);
                             SwingUtilities.invokeLater(() -> progressBar.setValue(sentEmails.size()));
                         }
-                    } catch (Exception e) {
+                    } catch (MessagingException e) {
                         e.fillInStackTrace();
-                        SwingUtilities.invokeLater(() -> showErrorDialog(e));
+                        // Log the error and continue with the next email
+                        System.err.println("Failed to send email to: " + recipientEmail + " - " + e.getMessage());
                     }
                 }));
             }
@@ -219,7 +221,6 @@ public class Core extends JFrame {
                     future.get();  // wait for all tasks to complete
                 } catch (ExecutionException | InterruptedException e) {
                     e.fillInStackTrace();
-                    SwingUtilities.invokeLater(() -> showErrorDialog(e));
                 }
             }
 
