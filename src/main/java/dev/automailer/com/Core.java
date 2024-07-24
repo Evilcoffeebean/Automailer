@@ -208,10 +208,14 @@ public class Core extends JFrame {
                             sentEmails.add(recipientEmail);
                             SwingUtilities.invokeLater(() -> progressBar.setValue(sentEmails.size()));
                         }
+                        // Sleep to avoid rate limiting
+                        Thread.sleep(200);  // Adjust sleep time as necessary
                     } catch (MessagingException e) {
                         e.fillInStackTrace();
                         // Log the error and continue with the next email
                         System.err.println("Failed to send email to: " + recipientEmail + " - " + e.getMessage());
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
                     }
                 }));
             }
