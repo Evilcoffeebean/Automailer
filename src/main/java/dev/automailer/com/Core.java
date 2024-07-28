@@ -23,7 +23,26 @@ public class Core extends JFrame {
     private JTextField txtEmail;
     private JPasswordField txtPassword;
     private JProgressBar progressBar;
+    private JComboBox<String> cmbEmailProvider;
     private Session session;
+
+    private static final Map<String, String[]> SMTP_SETTINGS = new HashMap<>();
+
+    static {
+        SMTP_SETTINGS.put("Gmail", new String[]{"smtp.gmail.com", "587"});
+        SMTP_SETTINGS.put("Yahoo", new String[]{"smtp.mail.yahoo.com", "587"});
+        SMTP_SETTINGS.put("iCloud", new String[]{"smtp.mail.me.com", "587"});
+        SMTP_SETTINGS.put("Outlook", new String[]{"smtp.office365.com", "587"});
+        SMTP_SETTINGS.put("AOL", new String[]{"smtp.aol.com", "587"});
+        SMTP_SETTINGS.put("GMX", new String[]{"mail.gmx.com", "587"});
+        SMTP_SETTINGS.put("Yandex", new String[]{"smtp.yandex.com", "465"});
+        SMTP_SETTINGS.put("Zoho", new String[]{"smtp.zoho.com", "587"});
+        SMTP_SETTINGS.put("Mail.com", new String[]{"smtp.mail.com", "587"});
+        SMTP_SETTINGS.put("ProtonMail", new String[]{"127.0.0.1", "1025"});  // Use with Mailvelope
+        SMTP_SETTINGS.put("Tutanota", new String[]{"smtp.tutanota.com", "587"});
+        SMTP_SETTINGS.put("FastMail", new String[]{"smtp.fastmail.com", "587"});
+        SMTP_SETTINGS.put("1&1", new String[]{"smtp.1and1.com", "587"});
+    }
 
     public Core() {
         createUI();
@@ -43,54 +62,64 @@ public class Core extends JFrame {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(5, 5, 5, 5);
 
-        JLabel lblEmail = new JLabel("Email:");
+        JLabel lblEmailProvider = new JLabel("Provider:");
         gbc.gridx = 0;
         gbc.gridy = 0;
+        panel.add(lblEmailProvider, gbc);
+
+        cmbEmailProvider = new JComboBox<>(SMTP_SETTINGS.keySet().toArray(new String[0]));
+        gbc.gridx = 1;
+        gbc.gridy = 0;
+        panel.add(cmbEmailProvider, gbc);
+
+        JLabel lblEmail = new JLabel("Email:");
+        gbc.gridx = 0;
+        gbc.gridy = 1;
         panel.add(lblEmail, gbc);
 
         txtEmail = new JTextField(20);
         gbc.gridx = 1;
-        gbc.gridy = 0;
+        gbc.gridy = 1;
         panel.add(txtEmail, gbc);
 
         JLabel lblPassword = new JLabel("Lozinka:");
         gbc.gridx = 0;
-        gbc.gridy = 1;
+        gbc.gridy = 2;
         panel.add(lblPassword, gbc);
 
         txtPassword = new JPasswordField(20);
         gbc.gridx = 1;
-        gbc.gridy = 1;
+        gbc.gridy = 2;
         panel.add(txtPassword, gbc);
 
         JLabel lblFilePath = new JLabel("Popis adresa:");
         gbc.gridx = 0;
-        gbc.gridy = 2;
+        gbc.gridy = 3;
         panel.add(lblFilePath, gbc);
 
         txtFilePath = new JTextField(20);
         gbc.gridx = 1;
-        gbc.gridy = 2;
+        gbc.gridy = 3;
         panel.add(txtFilePath, gbc);
 
         JButton btnBrowse = new JButton("Trazilica");
         gbc.gridx = 2;
-        gbc.gridy = 2;
+        gbc.gridy = 3;
         panel.add(btnBrowse, gbc);
 
         JLabel lblSubject = new JLabel("Subjekt:");
         gbc.gridx = 0;
-        gbc.gridy = 3;
+        gbc.gridy = 4;
         panel.add(lblSubject, gbc);
 
         txtSubject = new JTextField(20);
         gbc.gridx = 1;
-        gbc.gridy = 3;
+        gbc.gridy = 4;
         panel.add(txtSubject, gbc);
 
         JLabel lblMessage = new JLabel("Sadrzaj:");
         gbc.gridx = 0;
-        gbc.gridy = 4;
+        gbc.gridy = 5;
         panel.add(lblMessage, gbc);
 
         txtMessage = new JTextArea(5, 20);
@@ -98,21 +127,21 @@ public class Core extends JFrame {
         txtMessage.setWrapStyleWord(true);
         JScrollPane scrollPane = new JScrollPane(txtMessage);
         gbc.gridx = 1;
-        gbc.gridy = 4;
+        gbc.gridy = 5;
         gbc.gridwidth = 2;
         gbc.fill = GridBagConstraints.BOTH;
         panel.add(scrollPane, gbc);
 
         JButton btnSend = new JButton("Posalji mail");
         gbc.gridx = 1;
-        gbc.gridy = 5;
+        gbc.gridy = 6;
         gbc.gridwidth = 1;
         panel.add(btnSend, gbc);
 
         progressBar = new JProgressBar();
         progressBar.setStringPainted(true);
         gbc.gridx = 0;
-        gbc.gridy = 6;
+        gbc.gridy = 7;
         gbc.gridwidth = 3;
         panel.add(progressBar, gbc);
 
@@ -133,10 +162,11 @@ public class Core extends JFrame {
             String filePath = txtFilePath.getText();
             String subject = txtSubject.getText();
             String messageBody = txtMessage.getText();
+            String provider = (String) cmbEmailProvider.getSelectedItem();
 
             new Thread(() -> {
                 try {
-                    session = authenticate(email, password);
+                    session = authenticate(email, password, provider);
                     List<String> sentEmails = sendEmailsFromFile(session, email, filePath, subject, messageBody);
 
                     SwingUtilities.invokeLater(() -> {
@@ -162,12 +192,16 @@ public class Core extends JFrame {
         }
     }
 
-    private Session authenticate(String email, String password) throws MessagingException {
+    private Session authenticate(String email, String password, String provider) throws MessagingException {
+        String[] settings = SMTP_SETTINGS.get(provider);
+        String host = settings[0];
+        String port = settings[1];
+
         Properties props = new Properties();
         props.put("mail.smtp.auth", "true");
         props.put("mail.smtp.starttls.enable", "true");
-        props.put("mail.smtp.host", "smtp.gmail.com");
-        props.put("mail.smtp.port", "587");
+        props.put("mail.smtp.host", host);
+        props.put("mail.smtp.port", port);
 
         Session session = Session.getInstance(props, new javax.mail.Authenticator() {
             protected PasswordAuthentication getPasswordAuthentication() {
@@ -177,7 +211,7 @@ public class Core extends JFrame {
 
         // Test the authentication
         Transport transport = session.getTransport("smtp");
-        transport.connect("smtp.gmail.com", email, password);
+        transport.connect(host, email, password);
         transport.close();
 
         return session;
@@ -186,6 +220,7 @@ public class Core extends JFrame {
     private List<String> sendEmailsFromFile(Session session, String email, String filePath, String subject, String messageBody) {
         List<String> sentEmails = new ArrayList<>();
         ExecutorService executor = Executors.newFixedThreadPool(10);
+        Semaphore semaphore = new Semaphore(5);  // Limit concurrent connections to avoid server limitations
 
         try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
             String recipient;
@@ -200,22 +235,22 @@ public class Core extends JFrame {
                 progressBar.setValue(0);
             });
 
+            int emailCount = allEmails.size();
+            int sleepTime = Math.max(5000 / emailCount, 1000); // Adjust sleep time to avoid rate limiting
+
             for (String recipientEmail : allEmails) {
                 futures.add(executor.submit(() -> {
                     try {
-                        sendEmail(session, email, recipientEmail, subject, messageBody);
+                        semaphore.acquire();  // Acquire a permit to proceed
+                        sendEmailWithRetries(session, email, recipientEmail, subject, messageBody, sleepTime);
                         synchronized (sentEmails) {
                             sentEmails.add(recipientEmail);
                             SwingUtilities.invokeLater(() -> progressBar.setValue(sentEmails.size()));
                         }
-                        // Sleep to avoid rate limiting
-                        Thread.sleep(200);  // Adjust sleep time as necessary
-                    } catch (MessagingException e) {
-                        e.fillInStackTrace();
-                        // Log the error and continue with the next email
-                        System.err.println("Failed to send email to: " + recipientEmail + " - " + e.getMessage());
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
+                    } finally {
+                        semaphore.release();  // Release the permit
                     }
                 }));
             }
@@ -245,6 +280,25 @@ public class Core extends JFrame {
         return sentEmails;
     }
 
+    private void sendEmailWithRetries(Session session, String fromEmail, String recipient, String subject, String messageBody, int sleepTime) throws InterruptedException {
+        int retries = 3;
+        while (retries > 0) {
+            try {
+                sendEmail(session, fromEmail, recipient, subject, messageBody);
+                System.out.println("Email poslan na: " + recipient);
+                return;
+            } catch (MessagingException e) {
+                retries--;
+                if (retries == 0) {
+                    System.err.println("Neuspjelo slanje na: " + recipient + " nakon opetovanih pokusaja");
+                } else {
+                    System.err.println("Pokusavam ponovno slati na: " + recipient + " (" + retries + " pokusaja ostalo)");
+                    Thread.sleep(sleepTime);
+                }
+            }
+        }
+    }
+
     private void sendEmail(Session session, String fromEmail, String recipient, String subject, String messageBody) throws MessagingException {
         Message message = new MimeMessage(session);
         message.setFrom(new InternetAddress(fromEmail));
@@ -253,11 +307,10 @@ public class Core extends JFrame {
         message.setText(messageBody);
 
         Transport.send(message);
-        System.out.println("Email sent to: " + recipient);
     }
 
     private void showErrorDialog(Throwable throwable) {
-        JDialog dialog = new JDialog(this, "Error", true);
+        JDialog dialog = new JDialog(this, "Problem", true);
         dialog.setSize(500, 300);
         dialog.setLocationRelativeTo(this);
 
