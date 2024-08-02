@@ -1,32 +1,45 @@
 package dev.automailer.com;
 
+import javax.activation.DataHandler;
+import javax.imageio.ImageIO;
 import javax.mail.*;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeMessage;
+import javax.mail.internet.*;
+import javax.mail.util.ByteArrayDataSource;
 import javax.swing.*;
+import javax.swing.text.BadLocationException;
 import java.awt.*;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
+import java.awt.dnd.DnDConstants;
+import java.awt.dnd.DropTarget;
+import java.awt.dnd.DropTargetDropEvent;
+import java.awt.image.BufferedImage;
+import java.io.*;
+import java.nio.file.Files;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.*;
+import java.util.prefs.BackingStoreException;
+import java.util.prefs.Preferences;
 
 public class Core extends JFrame {
 
-    private JTextField txtFilePath;
-    private JTextField txtSubject;
-    private JTextArea txtMessage;
     private JTextField txtEmail;
     private JPasswordField txtPassword;
+    private JComboBox<String> cmbSavedEmails;
+    private JTextField txtFilePath;
+    private JTextField txtSubject;
+    private JTextPane txtMessage;
     private JProgressBar progressBar;
     private JComboBox<String> cmbEmailProvider;
     private Session session;
 
     private static final Map<String, String[]> SMTP_SETTINGS = new HashMap<>();
+    private static final List<File> attachments = new ArrayList<>();
+    private static final List<ImageIcon> images = new ArrayList<>();
+    private static final String PREF_MESSAGE_SUBJECT = "message_subject";
+    private static final String PREF_MESSAGE_BODY = "message_body";
+    private final Preferences preferences;
 
     static {
         SMTP_SETTINGS.put("Gmail", new String[]{"smtp.gmail.com", "587"});
@@ -45,12 +58,14 @@ public class Core extends JFrame {
     }
 
     public Core() {
+        preferences = Preferences.userRoot().node(this.getClass().getName());
         createUI();
+        loadMessageContent();
     }
 
     private void createUI() {
         setTitle("Automatsko slanje mailova - Marin Dujmović");
-        setSize(600, 500);
+        setSize(600, 800);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
@@ -62,7 +77,7 @@ public class Core extends JFrame {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(5, 5, 5, 5);
 
-        JLabel lblEmailProvider = new JLabel("Provider:");
+        JLabel lblEmailProvider = new JLabel("Posluzitelj:");
         gbc.gridx = 0;
         gbc.gridy = 0;
         panel.add(lblEmailProvider, gbc);
@@ -72,80 +87,108 @@ public class Core extends JFrame {
         gbc.gridy = 0;
         panel.add(cmbEmailProvider, gbc);
 
-        JLabel lblEmail = new JLabel("Email:");
+        JLabel lblSavedEmails = new JLabel("Spremljeni Racuni:");
         gbc.gridx = 0;
         gbc.gridy = 1;
+        panel.add(lblSavedEmails, gbc);
+
+        cmbSavedEmails = new JComboBox<>();
+        loadSavedEmails();
+        gbc.gridx = 1;
+        gbc.gridy = 1;
+        panel.add(cmbSavedEmails, gbc);
+
+        JButton btnAddAccount = new JButton("Dodaj racun");
+        gbc.gridx = 2;
+        gbc.gridy = 1;
+        panel.add(btnAddAccount, gbc);
+
+        JButton btnRemoveAccount = new JButton("Ukloni racun");
+        gbc.gridx = 3;
+        gbc.gridy = 1;
+        panel.add(btnRemoveAccount, gbc);
+
+        JLabel lblEmail = new JLabel("Email:");
+        gbc.gridx = 0;
+        gbc.gridy = 2;
         panel.add(lblEmail, gbc);
 
         txtEmail = new JTextField(20);
         gbc.gridx = 1;
-        gbc.gridy = 1;
+        gbc.gridy = 2;
         panel.add(txtEmail, gbc);
 
         JLabel lblPassword = new JLabel("Lozinka:");
         gbc.gridx = 0;
-        gbc.gridy = 2;
+        gbc.gridy = 3;
         panel.add(lblPassword, gbc);
 
         txtPassword = new JPasswordField(20);
         gbc.gridx = 1;
-        gbc.gridy = 2;
+        gbc.gridy = 3;
         panel.add(txtPassword, gbc);
 
         JLabel lblFilePath = new JLabel("Popis adresa:");
         gbc.gridx = 0;
-        gbc.gridy = 3;
+        gbc.gridy = 4;
         panel.add(lblFilePath, gbc);
 
         txtFilePath = new JTextField(20);
         gbc.gridx = 1;
-        gbc.gridy = 3;
+        gbc.gridy = 4;
         panel.add(txtFilePath, gbc);
 
         JButton btnBrowse = new JButton("Trazilica");
         gbc.gridx = 2;
-        gbc.gridy = 3;
+        gbc.gridy = 4;
         panel.add(btnBrowse, gbc);
 
         JLabel lblSubject = new JLabel("Subjekt:");
         gbc.gridx = 0;
-        gbc.gridy = 4;
+        gbc.gridy = 5;
         panel.add(lblSubject, gbc);
 
         txtSubject = new JTextField(20);
         gbc.gridx = 1;
-        gbc.gridy = 4;
+        gbc.gridy = 5;
         panel.add(txtSubject, gbc);
 
         JLabel lblMessage = new JLabel("Sadrzaj:");
         gbc.gridx = 0;
-        gbc.gridy = 5;
+        gbc.gridy = 6;
         panel.add(lblMessage, gbc);
 
-        txtMessage = new JTextArea(5, 20);
-        txtMessage.setLineWrap(true);
-        txtMessage.setWrapStyleWord(true);
+        txtMessage = new JTextPane();
+        txtMessage.setContentType("text/html");
+
         JScrollPane scrollPane = new JScrollPane(txtMessage);
-        gbc.gridx = 1;
-        gbc.gridy = 5;
-        gbc.gridwidth = 2;
-        gbc.fill = GridBagConstraints.BOTH;
+        scrollPane.setPreferredSize(new Dimension(50, 50)); // Set the preferred width and height
+
+        gbc.gridx = 0; // Starting at column 0
+        gbc.gridy = 7; // Starting at row 6
+        gbc.gridwidth = 4; // Span across 4 columns
+        gbc.gridheight = 2; // Span across 2 rows
+        gbc.fill = GridBagConstraints.BOTH; // Fill the available space both horizontally and vertically
+        gbc.weightx = 1.0; // Allow the text area to expand horizontally
+        gbc.weighty = 1.0; // Allow the text area to expand vertically
+
         panel.add(scrollPane, gbc);
 
         JButton btnSend = new JButton("Posalji mail");
-        gbc.gridx = 1;
-        gbc.gridy = 6;
-        gbc.gridwidth = 1;
+        gbc.gridy = 9;
         panel.add(btnSend, gbc);
 
         progressBar = new JProgressBar();
         progressBar.setStringPainted(true);
         gbc.gridx = 0;
-        gbc.gridy = 7;
-        gbc.gridwidth = 3;
+        gbc.gridy = 11;
+        gbc.gridwidth = 4;
         panel.add(progressBar, gbc);
 
         add(panel);
+
+        // Load email and password when a saved email is selected
+        cmbSavedEmails.addActionListener(e -> loadEmailAndPassword());
 
         btnBrowse.addActionListener(e -> {
             JFileChooser fileChooser = new JFileChooser();
@@ -184,11 +227,114 @@ public class Core extends JFrame {
             }).start();
         });
 
+        btnAddAccount.addActionListener(e -> showAddAccountDialog());
+
+        btnRemoveAccount.addActionListener(e -> removeSelectedAccount());
+
         // Set a modern look and feel
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception ex) {
             showErrorDialog(ex);
+        }
+
+        // Enable drag and drop for attachments and images
+        enableDragAndDropForAttachmentsAndImages();
+
+        // Save the message content and subject when closing the application
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent windowEvent) {
+                saveMessageContent();
+            }
+        });
+    }
+
+    private void showAddAccountDialog() {
+        JDialog dialog = new JDialog(this, "Dodaj novi racun", true);
+        dialog.setSize(400, 200);
+        dialog.setLayout(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.insets = new Insets(5, 5, 5, 5);
+
+        JLabel lblEmail = new JLabel("Email:");
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        dialog.add(lblEmail, gbc);
+
+        JTextField txtNewEmail = new JTextField(20);
+        gbc.gridx = 1;
+        gbc.gridy = 0;
+        dialog.add(txtNewEmail, gbc);
+
+        JLabel lblPassword = new JLabel("App Password:");
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        dialog.add(lblPassword, gbc);
+
+        JPasswordField txtNewPassword = new JPasswordField(20);
+        gbc.gridx = 1;
+        gbc.gridy = 1;
+        dialog.add(txtNewPassword, gbc);
+
+        JButton btnSave = new JButton("Spremi");
+        gbc.gridx = 1;
+        gbc.gridy = 2;
+        dialog.add(btnSave, gbc);
+
+        btnSave.addActionListener(e -> {
+            String email = txtNewEmail.getText();
+            String password = new String(txtNewPassword.getPassword());
+            if (!email.isEmpty() && !password.isEmpty()) {
+                saveEmailAndPassword(email, password);
+                dialog.dispose();
+            } else {
+                JOptionPane.showMessageDialog(dialog, "Email i lozinka ne smiju biti prazni.", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
+    }
+
+    private void saveEmailAndPassword(String email, String password) {
+        preferences.put(email, password);
+        cmbSavedEmails.addItem(email); // Add to the dropdown
+    }
+
+    private void loadEmailAndPassword() {
+        String email = (String) cmbSavedEmails.getSelectedItem();
+        if (email != null) {
+            txtEmail.setText(email);
+            txtPassword.setText(preferences.get(email, ""));
+        }
+    }
+
+    private void loadSavedEmails() {
+        try {
+            for (String key : preferences.keys()) {
+                cmbSavedEmails.addItem(key);
+            }
+        } catch (BackingStoreException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void removeSelectedAccount() {
+        String selectedEmail = (String) cmbSavedEmails.getSelectedItem();
+        if (selectedEmail != null) {
+            // Remove from preferences
+            preferences.remove(selectedEmail);
+
+            // Remove from combo box
+            cmbSavedEmails.removeItem(selectedEmail);
+
+            // Clear email and password fields
+            txtEmail.setText("");
+            txtPassword.setText("");
+        } else {
+            JOptionPane.showMessageDialog(this, "Nije odabran racun za brisanje.", "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -291,6 +437,7 @@ public class Core extends JFrame {
                 retries--;
                 if (retries == 0) {
                     System.err.println("Neuspjelo slanje na: " + recipient + " nakon opetovanih pokusaja");
+                    e.printStackTrace();
                 } else {
                     System.err.println("Pokusavam ponovno slati na: " + recipient + " (" + retries + " pokusaja ostalo)");
                     Thread.sleep(sleepTime);
@@ -304,9 +451,102 @@ public class Core extends JFrame {
         message.setFrom(new InternetAddress(fromEmail));
         message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(recipient));
         message.setSubject(subject);
-        message.setText(messageBody);
+
+        // Create a multipart message for attachment and images
+        Multipart multipart = new MimeMultipart();
+
+        // Add text part
+        MimeBodyPart textBodyPart = new MimeBodyPart();
+        textBodyPart.setText(messageBody);
+        multipart.addBodyPart(textBodyPart);
+
+        // Add image parts
+        for (ImageIcon imageIcon : images) {
+            MimeBodyPart imageBodyPart = new MimeBodyPart();
+            ByteArrayOutputStream os = new ByteArrayOutputStream();
+            try {
+                ImageIO.write((BufferedImage) imageIcon.getImage(), "png", os);
+                imageBodyPart.setContentID("<" + UUID.randomUUID() + ">");
+                imageBodyPart.setDisposition(MimeBodyPart.INLINE);
+                imageBodyPart.setDataHandler(new DataHandler(new ByteArrayDataSource(os.toByteArray(), "image/png")));
+                multipart.addBodyPart(imageBodyPart);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        // Add attachments
+        for (File attachment : attachments) {
+            MimeBodyPart attachmentBodyPart = new MimeBodyPart();
+            try {
+                attachmentBodyPart.attachFile(attachment);
+                multipart.addBodyPart(attachmentBodyPart);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        message.setContent(multipart);
 
         Transport.send(message);
+    }
+
+    private void enableDragAndDropForAttachmentsAndImages() {
+        txtMessage.setDropTarget(new DropTarget() {
+            public synchronized void drop(DropTargetDropEvent evt) {
+                try {
+                    evt.acceptDrop(DnDConstants.ACTION_COPY);
+                    Transferable t = evt.getTransferable();
+                    List<File> droppedFiles = (List<File>) t.getTransferData(DataFlavor.javaFileListFlavor);
+                    for (File file : droppedFiles) {
+                        if (isImageFile(file)) {
+                            BufferedImage image = ImageIO.read(file);
+                            if (image != null) {
+                                ImageIcon imageIcon = new ImageIcon(image);
+                                images.add(imageIcon);
+                                insertImageInTextPane(txtMessage, imageIcon);
+                            }
+                        } else {
+                            attachments.add(file);
+                        }
+                    }
+                    JOptionPane.showMessageDialog(null, "Datoteke dodane.");
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            }
+        });
+    }
+
+    private boolean isImageFile(File file) {
+        try {
+            String mimetype = Files.probeContentType(file.toPath());
+            return mimetype != null && mimetype.split("/")[0].equals("image");
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    private void insertImageInTextPane(JTextPane textPane, ImageIcon imageIcon) {
+        try {
+            textPane.getDocument().insertString(textPane.getDocument().getLength(), "\n", null);
+            textPane.insertIcon(imageIcon);
+        } catch (BadLocationException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void saveMessageContent() {
+        // Save the message subject and body to preferences
+        preferences.put(PREF_MESSAGE_SUBJECT, txtSubject.getText());
+        preferences.put(PREF_MESSAGE_BODY, txtMessage.getText());
+    }
+
+    private void loadMessageContent() {
+        // Load the message subject and body from preferences
+        txtSubject.setText(preferences.get(PREF_MESSAGE_SUBJECT, ""));
+        txtMessage.setText(preferences.get(PREF_MESSAGE_BODY, ""));
     }
 
     private void showErrorDialog(Throwable throwable) {
