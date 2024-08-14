@@ -7,6 +7,7 @@ import javax.mail.internet.*;
 import javax.mail.util.ByteArrayDataSource;
 import javax.swing.*;
 import javax.swing.text.BadLocationException;
+import javax.swing.text.StyledEditorKit;
 import java.awt.*;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
@@ -65,7 +66,7 @@ public class Core extends JFrame {
 
     private void createUI() {
         setTitle("Automatsko slanje mailova - Marin Dujmović");
-        setSize(600, 800);
+        setSize(490, 600); // Reduced the size to make it more compact
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
@@ -75,7 +76,7 @@ public class Core extends JFrame {
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.insets = new Insets(2, 2, 2, 2); // Reduced insets for a tighter layout
 
         JLabel lblEmailProvider = new JLabel("Posluzitelj:");
         gbc.gridx = 0;
@@ -85,37 +86,42 @@ public class Core extends JFrame {
         cmbEmailProvider = new JComboBox<>(SMTP_SETTINGS.keySet().toArray(new String[0]));
         gbc.gridx = 1;
         gbc.gridy = 0;
+        gbc.gridwidth = 3;
         panel.add(cmbEmailProvider, gbc);
 
         JLabel lblSavedEmails = new JLabel("Spremljeni Racuni:");
         gbc.gridx = 0;
         gbc.gridy = 1;
+        gbc.gridwidth = 1;
         panel.add(lblSavedEmails, gbc);
 
         cmbSavedEmails = new JComboBox<>();
         loadSavedEmails();
         gbc.gridx = 1;
         gbc.gridy = 1;
+        gbc.gridwidth = 2;
         panel.add(cmbSavedEmails, gbc);
 
-        JButton btnAddAccount = new JButton("Dodaj racun");
-        gbc.gridx = 2;
+        JButton btnAddAccount = new JButton("Dodaj");
+        gbc.gridx = 3;
         gbc.gridy = 1;
         panel.add(btnAddAccount, gbc);
 
-        JButton btnRemoveAccount = new JButton("Ukloni racun");
-        gbc.gridx = 3;
+        JButton btnRemoveAccount = new JButton("Ukloni");
+        gbc.gridx = 5;
         gbc.gridy = 1;
         panel.add(btnRemoveAccount, gbc);
 
         JLabel lblEmail = new JLabel("Email:");
         gbc.gridx = 0;
         gbc.gridy = 2;
+        gbc.gridwidth = 1;
         panel.add(lblEmail, gbc);
 
         txtEmail = new JTextField(20);
         gbc.gridx = 1;
         gbc.gridy = 2;
+        gbc.gridwidth = 3;
         panel.add(txtEmail, gbc);
 
         JLabel lblPassword = new JLabel("Lozinka:");
@@ -126,6 +132,7 @@ public class Core extends JFrame {
         txtPassword = new JPasswordField(20);
         gbc.gridx = 1;
         gbc.gridy = 3;
+        gbc.gridwidth = 3;
         panel.add(txtPassword, gbc);
 
         JLabel lblFilePath = new JLabel("Popis adresa:");
@@ -136,10 +143,11 @@ public class Core extends JFrame {
         txtFilePath = new JTextField(20);
         gbc.gridx = 1;
         gbc.gridy = 4;
+        gbc.gridwidth = 2;
         panel.add(txtFilePath, gbc);
 
         JButton btnBrowse = new JButton("Trazilica");
-        gbc.gridx = 2;
+        gbc.gridx = 3;
         gbc.gridy = 4;
         panel.add(btnBrowse, gbc);
 
@@ -151,6 +159,7 @@ public class Core extends JFrame {
         txtSubject = new JTextField(20);
         gbc.gridx = 1;
         gbc.gridy = 5;
+        gbc.gridwidth = 3;
         panel.add(txtSubject, gbc);
 
         JLabel lblMessage = new JLabel("Sadrzaj:");
@@ -159,7 +168,7 @@ public class Core extends JFrame {
         panel.add(lblMessage, gbc);
 
         txtMessage = new JTextPane();
-        txtMessage.setContentType("text/html");
+        txtMessage.setContentType("text/plain"); // Ensure plain text content type
 
         JScrollPane scrollPane = new JScrollPane(txtMessage);
         scrollPane.setPreferredSize(new Dimension(50, 50)); // Set the preferred width and height
@@ -174,15 +183,16 @@ public class Core extends JFrame {
 
         panel.add(scrollPane, gbc);
 
-        JButton btnSend = new JButton("Posalji mail");
+        JButton btnSend = new JButton("Posalji");
         gbc.gridy = 9;
+        gbc.gridwidth = 1;
         panel.add(btnSend, gbc);
 
         progressBar = new JProgressBar();
         progressBar.setStringPainted(true);
-        gbc.gridx = 0;
-        gbc.gridy = 11;
-        gbc.gridwidth = 4;
+        gbc.gridx = 1;
+        gbc.gridy = 9;
+        gbc.gridwidth = 3;
         panel.add(progressBar, gbc);
 
         add(panel);
@@ -240,6 +250,21 @@ public class Core extends JFrame {
 
         // Enable drag and drop for attachments and images
         enableDragAndDropForAttachmentsAndImages();
+
+        // Override paste to ensure plain text only
+        txtMessage.setEditorKit(new StyledEditorKit() {
+            public void paste() {
+                Transferable content = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
+                if (content != null) {
+                    try {
+                        String text = (String) content.getTransferData(DataFlavor.stringFlavor);
+                        txtMessage.getDocument().insertString(txtMessage.getCaretPosition(), text, null);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        });
 
         // Save the message content and subject when closing the application
         addWindowListener(new java.awt.event.WindowAdapter() {
