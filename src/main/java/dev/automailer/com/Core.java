@@ -25,48 +25,45 @@ import java.util.prefs.Preferences;
 
 public class Core extends JFrame {
 
+    private JComboBox<String> cmbSavedEmails;
     private JTextField txtEmail;
     private JPasswordField txtPassword;
-    private JComboBox<String> cmbSavedEmails;
+    private JTextField txtPort;
+    private JComboBox<String> cmbSMTPServer;
     private JTextField txtFilePath;
     private JTextField txtSubject;
     private JTextPane txtMessage;
     private JProgressBar progressBar;
-    private JComboBox<String> cmbEmailProvider;
     private Session session;
 
-    private static final Map<String, String[]> SMTP_SETTINGS = new HashMap<>();
+    private static final Map<String, String[]> SMTP_SERVERS = new HashMap<>();
     private static final List<File> attachments = new ArrayList<>();
     private static final List<ImageIcon> images = new ArrayList<>();
     private static final String PREF_MESSAGE_SUBJECT = "message_subject";
     private static final String PREF_MESSAGE_BODY = "message_body";
+    private static final String PREF_EMAIL_ACCOUNTS = "email_accounts";
     private final Preferences preferences;
 
     static {
-        SMTP_SETTINGS.put("Gmail", new String[]{"smtp.gmail.com", "587"});
-        SMTP_SETTINGS.put("Yahoo", new String[]{"smtp.mail.yahoo.com", "587"});
-        SMTP_SETTINGS.put("iCloud", new String[]{"smtp.mail.me.com", "587"});
-        SMTP_SETTINGS.put("Outlook", new String[]{"smtp.office365.com", "587"});
-        SMTP_SETTINGS.put("AOL", new String[]{"smtp.aol.com", "587"});
-        SMTP_SETTINGS.put("GMX", new String[]{"mail.gmx.com", "587"});
-        SMTP_SETTINGS.put("Yandex", new String[]{"smtp.yandex.com", "465"});
-        SMTP_SETTINGS.put("Zoho", new String[]{"smtp.zoho.com", "587"});
-        SMTP_SETTINGS.put("Mail.com", new String[]{"smtp.mail.com", "587"});
-        SMTP_SETTINGS.put("ProtonMail", new String[]{"127.0.0.1", "1025"});  // Use with Mailvelope
-        SMTP_SETTINGS.put("Tutanota", new String[]{"smtp.tutanota.com", "587"});
-        SMTP_SETTINGS.put("FastMail", new String[]{"smtp.fastmail.com", "587"});
-        SMTP_SETTINGS.put("1&1", new String[]{"smtp.1and1.com", "587"});
+        SMTP_SERVERS.put("Gmail", new String[]{"smtp.gmail.com", "587"});
+        SMTP_SERVERS.put("Yahoo", new String[]{"smtp.mail.yahoo.com", "587"});
+        SMTP_SERVERS.put("Outlook", new String[]{"smtp.office365.com", "587"});
+        SMTP_SERVERS.put("iCloud", new String[]{"smtp.mail.me.com", "587"});
+        SMTP_SERVERS.put("AOL", new String[]{"smtp.aol.com", "587"});
+        SMTP_SERVERS.put("Zoho", new String[]{"smtp.zoho.com", "587"});
+        SMTP_SERVERS.put("Yandex", new String[]{"smtp.yandex.com", "465"});
     }
 
     public Core() {
         preferences = Preferences.userRoot().node(this.getClass().getName());
         createUI();
+        loadSavedEmails();
         loadMessageContent();
     }
 
     private void createUI() {
         setTitle("Automatsko slanje mailova - Marin Dujmović");
-        setSize(490, 600); // Reduced the size to make it more compact
+        setSize(700, 600);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
@@ -76,129 +73,147 @@ public class Core extends JFrame {
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(2, 2, 2, 2); // Reduced insets for a tighter layout
+        gbc.insets = new Insets(2, 2, 2, 2);
 
-        JLabel lblEmailProvider = new JLabel("Posluzitelj:");
+        gbc.weightx = 1.0;  // Ensure equal resizing
+
+        JLabel lblSavedEmails = new JLabel("Spremljeno:");
         gbc.gridx = 0;
         gbc.gridy = 0;
-        panel.add(lblEmailProvider, gbc);
-
-        cmbEmailProvider = new JComboBox<>(SMTP_SETTINGS.keySet().toArray(new String[0]));
-        gbc.gridx = 1;
-        gbc.gridy = 0;
-        gbc.gridwidth = 3;
-        panel.add(cmbEmailProvider, gbc);
-
-        JLabel lblSavedEmails = new JLabel("Spremljeni Racuni:");
-        gbc.gridx = 0;
-        gbc.gridy = 1;
         gbc.gridwidth = 1;
         panel.add(lblSavedEmails, gbc);
 
         cmbSavedEmails = new JComboBox<>();
-        loadSavedEmails();
         gbc.gridx = 1;
-        gbc.gridy = 1;
+        gbc.gridy = 0;
         gbc.gridwidth = 2;
         panel.add(cmbSavedEmails, gbc);
 
         JButton btnAddAccount = new JButton("Dodaj");
         gbc.gridx = 3;
-        gbc.gridy = 1;
+        gbc.gridy = 0;
         panel.add(btnAddAccount, gbc);
 
         JButton btnRemoveAccount = new JButton("Ukloni");
-        gbc.gridx = 5;
-        gbc.gridy = 1;
+        gbc.gridx = 4;
+        gbc.gridy = 0;
         panel.add(btnRemoveAccount, gbc);
 
         JLabel lblEmail = new JLabel("Email:");
         gbc.gridx = 0;
-        gbc.gridy = 2;
+        gbc.gridy = 1;
         gbc.gridwidth = 1;
         panel.add(lblEmail, gbc);
 
         txtEmail = new JTextField(20);
         gbc.gridx = 1;
-        gbc.gridy = 2;
-        gbc.gridwidth = 3;
+        gbc.gridy = 1;
+        gbc.gridwidth = 3;  // Spanning across 3 columns
         panel.add(txtEmail, gbc);
 
         JLabel lblPassword = new JLabel("Lozinka:");
         gbc.gridx = 0;
-        gbc.gridy = 3;
+        gbc.gridy = 2;
+        gbc.gridwidth = 1;
         panel.add(lblPassword, gbc);
 
         txtPassword = new JPasswordField(20);
         gbc.gridx = 1;
-        gbc.gridy = 3;
+        gbc.gridy = 2;
         gbc.gridwidth = 3;
         panel.add(txtPassword, gbc);
 
-        JLabel lblFilePath = new JLabel("Popis adresa:");
+        JLabel lblSMTPServer = new JLabel("SMTP Posluzitelj:");
+        gbc.gridx = 0;
+        gbc.gridy = 3;
+        gbc.gridwidth = 1;
+        panel.add(lblSMTPServer, gbc);
+
+        cmbSMTPServer = new JComboBox<>(SMTP_SERVERS.keySet().toArray(new String[0]));
+        gbc.gridx = 1;
+        gbc.gridy = 3;
+        gbc.gridwidth = 2;
+        panel.add(cmbSMTPServer, gbc);
+
+        JLabel lblPort = new JLabel("Port:");
         gbc.gridx = 0;
         gbc.gridy = 4;
+        gbc.gridwidth = 1;
+        panel.add(lblPort, gbc);
+
+        txtPort = new JTextField(20);
+        gbc.gridx = 1;
+        gbc.gridy = 4;
+        gbc.gridwidth = 3;
+        panel.add(txtPort, gbc);
+
+        JLabel lblFilePath = new JLabel("Popis adresa:");
+        gbc.gridx = 0;
+        gbc.gridy = 5;
+        gbc.gridwidth = 1;
         panel.add(lblFilePath, gbc);
 
         txtFilePath = new JTextField(20);
         gbc.gridx = 1;
-        gbc.gridy = 4;
+        gbc.gridy = 5;
         gbc.gridwidth = 2;
         panel.add(txtFilePath, gbc);
 
         JButton btnBrowse = new JButton("Trazilica");
         gbc.gridx = 3;
-        gbc.gridy = 4;
+        gbc.gridy = 5;
+        gbc.gridwidth = 1;
         panel.add(btnBrowse, gbc);
 
         JLabel lblSubject = new JLabel("Subjekt:");
         gbc.gridx = 0;
-        gbc.gridy = 5;
+        gbc.gridy = 6;
+        gbc.gridwidth = 1;
         panel.add(lblSubject, gbc);
 
         txtSubject = new JTextField(20);
         gbc.gridx = 1;
-        gbc.gridy = 5;
+        gbc.gridy = 6;
         gbc.gridwidth = 3;
         panel.add(txtSubject, gbc);
 
         JLabel lblMessage = new JLabel("Sadrzaj:");
         gbc.gridx = 0;
-        gbc.gridy = 6;
+        gbc.gridy = 7;
+        gbc.gridwidth = 1;
         panel.add(lblMessage, gbc);
 
         txtMessage = new JTextPane();
-        txtMessage.setContentType("text/plain"); // Ensure plain text content type
+        txtMessage.setContentType("text/plain");
 
         JScrollPane scrollPane = new JScrollPane(txtMessage);
-        scrollPane.setPreferredSize(new Dimension(50, 50)); // Set the preferred width and height
+        scrollPane.setPreferredSize(new Dimension(50, 50));
 
-        gbc.gridx = 0; // Starting at column 0
-        gbc.gridy = 7; // Starting at row 6
-        gbc.gridwidth = 4; // Span across 4 columns
-        gbc.gridheight = 2; // Span across 2 rows
-        gbc.fill = GridBagConstraints.BOTH; // Fill the available space both horizontally and vertically
-        gbc.weightx = 1.0; // Allow the text area to expand horizontally
-        gbc.weighty = 1.0; // Allow the text area to expand vertically
+        gbc.gridx = 0;
+        gbc.gridy = 8;
+        gbc.gridwidth = 4;
+        gbc.gridheight = 2;
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
 
         panel.add(scrollPane, gbc);
 
         JButton btnSend = new JButton("Posalji");
-        gbc.gridy = 9;
+        gbc.gridy = 10;
         gbc.gridwidth = 1;
         panel.add(btnSend, gbc);
 
         progressBar = new JProgressBar();
         progressBar.setStringPainted(true);
         gbc.gridx = 1;
-        gbc.gridy = 9;
+        gbc.gridy = 10;
         gbc.gridwidth = 3;
         panel.add(progressBar, gbc);
 
         add(panel);
 
-        // Load email and password when a saved email is selected
-        cmbSavedEmails.addActionListener(e -> loadEmailAndPassword());
+        cmbSMTPServer.addActionListener(e -> updateSMTPAndPort());
 
         btnBrowse.addActionListener(e -> {
             JFileChooser fileChooser = new JFileChooser();
@@ -212,46 +227,54 @@ public class Core extends JFrame {
         btnSend.addActionListener(e -> {
             String email = txtEmail.getText();
             String password = new String(txtPassword.getPassword());
+            String smtpServer = SMTP_SERVERS.get(cmbSMTPServer.getSelectedItem())[0];
+            String port = txtPort.getText();
             String filePath = txtFilePath.getText();
             String subject = txtSubject.getText();
             String messageBody = txtMessage.getText();
-            String provider = (String) cmbEmailProvider.getSelectedItem();
 
             new Thread(() -> {
                 try {
-                    session = authenticate(email, password, provider);
-                    List<String> sentEmails = sendEmailsFromFile(session, email, filePath, subject, messageBody);
+                    session = getOrCreateSession(email, password, smtpServer, port);
+                    List<String> recipients = loadRecipientsFromFile(filePath);
+
+                    // Set up progress bar
+                    SwingUtilities.invokeLater(() -> {
+                        progressBar.setMaximum(recipients.size());
+                        progressBar.setValue(0);
+                    });
+
+                    sendEmailsWithThrottling(session, email, recipients, subject, messageBody, 5000);
 
                     SwingUtilities.invokeLater(() -> {
-                        if (!sentEmails.isEmpty()) {
+                        if (!recipients.isEmpty()) {
                             txtSubject.setText("");
                             txtMessage.setText("");
-                            showSentEmailsDialog(sentEmails);
+                            showSentEmailsDialog(recipients);
                         }
-                        progressBar.setValue(0);  // Reset progress bar
+                        progressBar.setValue(0);
                     });
                 } catch (Exception ex) {
-                    ex.fillInStackTrace();
+                    ex.printStackTrace();
                     SwingUtilities.invokeLater(() -> showErrorDialog(ex));
                 }
             }).start();
         });
 
-        btnAddAccount.addActionListener(e -> showAddAccountDialog());
+        btnAddAccount.addActionListener(e -> saveEmailAccount());
 
-        btnRemoveAccount.addActionListener(e -> removeSelectedAccount());
+        btnRemoveAccount.addActionListener(e -> removeEmailAccount());
 
-        // Set a modern look and feel
+        cmbSavedEmails.addActionListener(e -> loadSelectedEmailAccount());
+
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception ex) {
             showErrorDialog(ex);
         }
 
-        // Enable drag and drop for attachments and images
         enableDragAndDropForAttachmentsAndImages();
 
-        // Override paste to ensure plain text only
         txtMessage.setEditorKit(new StyledEditorKit() {
             public void paste() {
                 Transferable content = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
@@ -266,208 +289,114 @@ public class Core extends JFrame {
             }
         });
 
-        // Save the message content and subject when closing the application
         addWindowListener(new java.awt.event.WindowAdapter() {
             @Override
             public void windowClosing(java.awt.event.WindowEvent windowEvent) {
                 saveMessageContent();
             }
         });
+
+        // Initial setup for SMTP server and port
+        updateSMTPAndPort();
     }
 
-    private void showAddAccountDialog() {
-        JDialog dialog = new JDialog(this, "Dodaj novi racun", true);
-        dialog.setSize(400, 200);
-        dialog.setLayout(new GridBagLayout());
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(5, 5, 5, 5);
-
-        JLabel lblEmail = new JLabel("Email:");
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        dialog.add(lblEmail, gbc);
-
-        JTextField txtNewEmail = new JTextField(20);
-        gbc.gridx = 1;
-        gbc.gridy = 0;
-        dialog.add(txtNewEmail, gbc);
-
-        JLabel lblPassword = new JLabel("App Password:");
-        gbc.gridx = 0;
-        gbc.gridy = 1;
-        dialog.add(lblPassword, gbc);
-
-        JPasswordField txtNewPassword = new JPasswordField(20);
-        gbc.gridx = 1;
-        gbc.gridy = 1;
-        dialog.add(txtNewPassword, gbc);
-
-        JButton btnSave = new JButton("Spremi");
-        gbc.gridx = 1;
-        gbc.gridy = 2;
-        dialog.add(btnSave, gbc);
-
-        btnSave.addActionListener(e -> {
-            String email = txtNewEmail.getText();
-            String password = new String(txtNewPassword.getPassword());
-            if (!email.isEmpty() && !password.isEmpty()) {
-                saveEmailAndPassword(email, password);
-                dialog.dispose();
-            } else {
-                JOptionPane.showMessageDialog(dialog, "Email i lozinka ne smiju biti prazni.", "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        });
-
-        dialog.setLocationRelativeTo(this);
-        dialog.setVisible(true);
+    private void updateSMTPAndPort() {
+        String selectedServer = (String) cmbSMTPServer.getSelectedItem();
+        String[] serverDetails = SMTP_SERVERS.get(selectedServer);
+        txtPort.setText(serverDetails[1]);
     }
 
-    private void saveEmailAndPassword(String email, String password) {
-        preferences.put(email, password);
-        cmbSavedEmails.addItem(email); // Add to the dropdown
-    }
-
-    private void loadEmailAndPassword() {
-        String email = (String) cmbSavedEmails.getSelectedItem();
-        if (email != null) {
-            txtEmail.setText(email);
-            txtPassword.setText(preferences.get(email, ""));
+    // Implement session reuse
+    private Session getOrCreateSession(String email, String password, String smtpServer, String port) throws MessagingException {
+        if (session == null) {
+            session = authenticateWithSMTP(email, password, smtpServer, port);
         }
-    }
-
-    private void loadSavedEmails() {
-        try {
-            for (String key : preferences.keys()) {
-                cmbSavedEmails.addItem(key);
-            }
-        } catch (BackingStoreException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void removeSelectedAccount() {
-        String selectedEmail = (String) cmbSavedEmails.getSelectedItem();
-        if (selectedEmail != null) {
-            // Remove from preferences
-            preferences.remove(selectedEmail);
-
-            // Remove from combo box
-            cmbSavedEmails.removeItem(selectedEmail);
-
-            // Clear email and password fields
-            txtEmail.setText("");
-            txtPassword.setText("");
-        } else {
-            JOptionPane.showMessageDialog(this, "Nije odabran racun za brisanje.", "Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private Session authenticate(String email, String password, String provider) throws MessagingException {
-        String[] settings = SMTP_SETTINGS.get(provider);
-        String host = settings[0];
-        String port = settings[1];
-
-        Properties props = new Properties();
-        props.put("mail.smtp.auth", "true");
-        props.put("mail.smtp.starttls.enable", "true");
-        props.put("mail.smtp.host", host);
-        props.put("mail.smtp.port", port);
-
-        Session session = Session.getInstance(props, new javax.mail.Authenticator() {
-            protected PasswordAuthentication getPasswordAuthentication() {
-                return new PasswordAuthentication(email, password);
-            }
-        });
-
-        // Test the authentication
-        Transport transport = session.getTransport("smtp");
-        transport.connect(host, email, password);
-        transport.close();
-
         return session;
     }
 
-    private List<String> sendEmailsFromFile(Session session, String email, String filePath, String subject, String messageBody) {
-        List<String> sentEmails = new ArrayList<>();
-        ExecutorService executor = Executors.newFixedThreadPool(10);
-        Semaphore semaphore = new Semaphore(5);  // Limit concurrent connections to avoid server limitations
+    // Implement exponential backoff for authentication
+    private Session authenticateWithSMTP(String email, String password, String smtpServer, String port) throws MessagingException {
+        Properties props = new Properties();
+        props.put("mail.smtp.auth", "true");
+        props.put("mail.smtp.starttls.enable", "true");
+        props.put("mail.smtp.host", smtpServer);
+        props.put("mail.smtp.port", port);
 
-        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
-            String recipient;
-            List<Future<?>> futures = new ArrayList<>();
-            List<String> allEmails = new ArrayList<>();
-            while ((recipient = br.readLine()) != null) {
-                allEmails.add(recipient);
-            }
+        int attempts = 0;
+        int maxAttempts = 5;
+        long waitTime = 1000; // Initial wait time in milliseconds
 
-            SwingUtilities.invokeLater(() -> {
-                progressBar.setMaximum(allEmails.size());
-                progressBar.setValue(0);
-            });
-
-            int emailCount = allEmails.size();
-            int sleepTime = Math.max(5000 / emailCount, 1000); // Adjust sleep time to avoid rate limiting
-
-            for (String recipientEmail : allEmails) {
-                futures.add(executor.submit(() -> {
-                    try {
-                        semaphore.acquire();  // Acquire a permit to proceed
-                        sendEmailWithRetries(session, email, recipientEmail, subject, messageBody, sleepTime);
-                        synchronized (sentEmails) {
-                            sentEmails.add(recipientEmail);
-                            SwingUtilities.invokeLater(() -> progressBar.setValue(sentEmails.size()));
-                        }
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    } finally {
-                        semaphore.release();  // Release the permit
-                    }
-                }));
-            }
-
-            for (Future<?> future : futures) {
-                try {
-                    future.get();  // wait for all tasks to complete
-                } catch (ExecutionException | InterruptedException e) {
-                    e.fillInStackTrace();
-                }
-            }
-
-        } catch (IOException e) {
-            e.fillInStackTrace();
-            SwingUtilities.invokeLater(() -> showErrorDialog(e));
-        } finally {
-            executor.shutdown();
+        while (attempts < maxAttempts) {
             try {
-                if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
-                    executor.shutdownNow();
+                attempts++;
+                Session session = Session.getInstance(props, new javax.mail.Authenticator() {
+                    protected PasswordAuthentication getPasswordAuthentication() {
+                        return new PasswordAuthentication(email, password);
+                    }
+                });
+
+                // Test the session by connecting to the SMTP server
+                Transport transport = session.getTransport("smtp");
+                transport.connect(smtpServer, email, password);
+                transport.close();
+
+                return session; // Successful authentication, return session
+
+            } catch (AuthenticationFailedException e) {
+                System.err.println("Authentication failed: " + e.getMessage());
+                if (attempts >= maxAttempts) {
+                    throw new MessagingException("Max authentication attempts reached", e);
                 }
-            } catch (InterruptedException e) {
-                executor.shutdownNow();
-                SwingUtilities.invokeLater(() -> showErrorDialog(e));
+
+                // Exponential backoff
+                try {
+                    System.out.println("Waiting for " + waitTime + "ms before next attempt...");
+                    Thread.sleep(waitTime);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+                waitTime *= 2; // Double the wait time for the next attempt
+            } catch (MessagingException e) {
+                throw new MessagingException("Messaging exception occurred", e);
             }
         }
-        return sentEmails;
+
+        throw new MessagingException("Failed to authenticate after " + maxAttempts + " attempts");
     }
 
-    private void sendEmailWithRetries(Session session, String fromEmail, String recipient, String subject, String messageBody, int sleepTime) throws InterruptedException {
-        int retries = 3;
-        while (retries > 0) {
-            try {
-                sendEmail(session, fromEmail, recipient, subject, messageBody);
-                System.out.println("Email poslan na: " + recipient);
-                return;
-            } catch (MessagingException e) {
-                retries--;
-                if (retries == 0) {
-                    System.err.println("Neuspjelo slanje na: " + recipient + " nakon opetovanih pokusaja");
-                    e.printStackTrace();
-                } else {
-                    System.err.println("Pokusavam ponovno slati na: " + recipient + " (" + retries + " pokusaja ostalo)");
-                    Thread.sleep(sleepTime);
-                }
+    private List<String> loadRecipientsFromFile(String filePath) throws IOException {
+        List<String> recipients = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                recipients.add(line.trim());
             }
+        }
+        return recipients;
+    }
+
+    private void sendEmailsWithThrottling(Session session, String fromEmail, List<String> recipients, String subject, String messageBody, int delayMs) {
+        ExecutorService executor = Executors.newFixedThreadPool(10);
+
+        for (String recipient : recipients) {
+            executor.submit(() -> {
+                try {
+                    sendEmail(session, fromEmail, recipient, subject, messageBody);
+                    // Update progress bar after each email is sent or attempt is made
+                    SwingUtilities.invokeLater(() -> progressBar.setValue(progressBar.getValue() + 1));
+                    Thread.sleep(delayMs);
+                } catch (MessagingException | InterruptedException e) {
+                    e.printStackTrace();
+                    SwingUtilities.invokeLater(() -> progressBar.setValue(progressBar.getValue() + 1));
+                }
+            });
+        }
+
+        executor.shutdown();
+        try {
+            executor.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
     }
 
@@ -477,15 +406,10 @@ public class Core extends JFrame {
         message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(recipient));
         message.setSubject(subject);
 
-        // Create a multipart message for attachment and images
-        Multipart multipart = new MimeMultipart();
+        MimeMultipart multipart = new MimeMultipart();
 
-        // Add text part
-        MimeBodyPart textBodyPart = new MimeBodyPart();
-        textBodyPart.setText(messageBody);
-        multipart.addBodyPart(textBodyPart);
+        addComplianceContent(multipart, messageBody);
 
-        // Add image parts
         for (ImageIcon imageIcon : images) {
             MimeBodyPart imageBodyPart = new MimeBodyPart();
             ByteArrayOutputStream os = new ByteArrayOutputStream();
@@ -500,7 +424,6 @@ public class Core extends JFrame {
             }
         }
 
-        // Add attachments
         for (File attachment : attachments) {
             MimeBodyPart attachmentBodyPart = new MimeBodyPart();
             try {
@@ -514,6 +437,12 @@ public class Core extends JFrame {
         message.setContent(multipart);
 
         Transport.send(message);
+    }
+
+    private void addComplianceContent(MimeMultipart multipart, String messageBody) throws MessagingException {
+        MimeBodyPart textBodyPart = new MimeBodyPart();
+        textBodyPart.setText(messageBody + "\n\nTo unsubscribe, click here.");
+        multipart.addBodyPart(textBodyPart);
     }
 
     private void enableDragAndDropForAttachmentsAndImages() {
@@ -562,14 +491,59 @@ public class Core extends JFrame {
         }
     }
 
+    private void saveEmailAccount() {
+        String email = txtEmail.getText();
+        String password = new String(txtPassword.getPassword());
+        if (!email.isEmpty() && !password.isEmpty()) {
+            preferences.put(email, password);
+            if (((DefaultComboBoxModel<String>) cmbSavedEmails.getModel()).getIndexOf(email) == -1) {
+                cmbSavedEmails.addItem(email);
+            }
+            JOptionPane.showMessageDialog(this, "Racun spremljen.", "Uspjeh", JOptionPane.INFORMATION_MESSAGE);
+        } else {
+            JOptionPane.showMessageDialog(this, "Email i lozinka ne mogu biti prazni.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void removeEmailAccount() {
+        String selectedEmail = (String) cmbSavedEmails.getSelectedItem();
+        if (selectedEmail != null) {
+            preferences.remove(selectedEmail);
+            cmbSavedEmails.removeItem(selectedEmail);
+            txtEmail.setText("");
+            txtPassword.setText("");
+            JOptionPane.showMessageDialog(this, "Racun uklonjen.", "Uspjeh", JOptionPane.INFORMATION_MESSAGE);
+        } else {
+            JOptionPane.showMessageDialog(this, "Nema racuna za ukloniti.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void loadSelectedEmailAccount() {
+        String selectedEmail = (String) cmbSavedEmails.getSelectedItem();
+        if (selectedEmail != null) {
+            txtEmail.setText(selectedEmail);
+            txtPassword.setText(preferences.get(selectedEmail, ""));
+        }
+    }
+
+    private void loadSavedEmails() {
+        try {
+            for (String key : preferences.keys()) {
+                if (!key.equals(PREF_MESSAGE_SUBJECT) && !key.equals(PREF_MESSAGE_BODY)) {
+                    cmbSavedEmails.addItem(key);
+                }
+            }
+        } catch (BackingStoreException e) {
+            e.printStackTrace();
+        }
+    }
+
     private void saveMessageContent() {
-        // Save the message subject and body to preferences
         preferences.put(PREF_MESSAGE_SUBJECT, txtSubject.getText());
         preferences.put(PREF_MESSAGE_BODY, txtMessage.getText());
     }
 
     private void loadMessageContent() {
-        // Load the message subject and body from preferences
         txtSubject.setText(preferences.get(PREF_MESSAGE_SUBJECT, ""));
         txtMessage.setText(preferences.get(PREF_MESSAGE_BODY, ""));
     }
