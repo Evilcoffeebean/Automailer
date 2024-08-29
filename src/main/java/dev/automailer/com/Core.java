@@ -345,7 +345,10 @@ public class Core extends JFrame {
             } catch (AuthenticationFailedException e) {
                 System.err.println("Authentication failed: " + e.getMessage());
                 if (attempts >= maxAttempts) {
-                    throw new MessagingException("Max authentication attempts reached", e);
+                    // Show a pop-up and terminate the program
+                    SwingUtilities.invokeLater(() -> {
+                        JOptionPane.showMessageDialog(null, "Max authentication attempts reached. The program will now exit.", "Authentication Failed", JOptionPane.ERROR_MESSAGE);
+                    });
                 }
 
                 // Exponential backoff
@@ -436,7 +439,17 @@ public class Core extends JFrame {
 
         message.setContent(multipart);
 
-        Transport.send(message);
+        try {
+            Transport.send(message);
+        } catch (AuthenticationFailedException e) {
+            // Show a pop-up and terminate the program
+            SwingUtilities.invokeLater(() -> {
+                JOptionPane.showMessageDialog(null, "Max authentication attempts reached. The program will now exit.", "Authentication Failed", JOptionPane.ERROR_MESSAGE);
+            });
+            // Terminate the program
+            System.exit(1);
+            return;
+        }
     }
 
     private void addComplianceContent(MimeMultipart multipart, String messageBody) throws MessagingException {
