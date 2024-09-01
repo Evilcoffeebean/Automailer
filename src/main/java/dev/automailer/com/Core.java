@@ -36,12 +36,13 @@ public class Core extends JFrame {
     private JProgressBar progressBar;
     private Session session;
 
+    private JComboBox<String> cmbSavedMessages;
+    private JButton btnAddMessage;
+    private JButton btnRemoveMessage;
+
     private static final Map<String, String[]> SMTP_SERVERS = new HashMap<>();
     private static final List<File> attachments = new ArrayList<>();
     private static final List<ImageIcon> images = new ArrayList<>();
-    private static final String PREF_MESSAGE_SUBJECT = "message_subject";
-    private static final String PREF_MESSAGE_BODY = "message_body";
-    private static final String PREF_EMAIL_ACCOUNTS = "email_accounts";
     private final Preferences preferences;
 
     static {
@@ -58,7 +59,7 @@ public class Core extends JFrame {
         preferences = Preferences.userRoot().node(this.getClass().getName());
         createUI();
         loadSavedEmails();
-        loadMessageContent();
+        loadSavedMessages();  // Load saved messages
     }
 
     private void createUI() {
@@ -165,22 +166,41 @@ public class Core extends JFrame {
         gbc.gridwidth = 1;
         panel.add(btnBrowse, gbc);
 
-        JLabel lblSubject = new JLabel("Subjekt:");
+        JLabel lblSavedMessages = new JLabel("Spremljene Poruke:");
         gbc.gridx = 0;
         gbc.gridy = 6;
-        gbc.gridwidth = 1;
+        panel.add(lblSavedMessages, gbc);
+
+        cmbSavedMessages = new JComboBox<>();
+        gbc.gridx = 1;
+        gbc.gridy = 6;
+        gbc.gridwidth = 2;
+        panel.add(cmbSavedMessages, gbc);
+
+        btnAddMessage = new JButton("Dodaj Poruku");
+        gbc.gridx = 3;
+        gbc.gridy = 6;
+        panel.add(btnAddMessage, gbc);
+
+        btnRemoveMessage = new JButton("Ukloni Poruku");
+        gbc.gridx = 4;
+        gbc.gridy = 6;
+        panel.add(btnRemoveMessage, gbc);
+
+        JLabel lblSubject = new JLabel("Subjekt:");
+        gbc.gridx = 0;
+        gbc.gridy = 7;
         panel.add(lblSubject, gbc);
 
         txtSubject = new JTextField(20);
         gbc.gridx = 1;
-        gbc.gridy = 6;
+        gbc.gridy = 7;
         gbc.gridwidth = 3;
         panel.add(txtSubject, gbc);
 
         JLabel lblMessage = new JLabel("Sadrzaj:");
         gbc.gridx = 0;
-        gbc.gridy = 7;
-        gbc.gridwidth = 1;
+        gbc.gridy = 8;
         panel.add(lblMessage, gbc);
 
         txtMessage = new JTextPane();
@@ -189,9 +209,9 @@ public class Core extends JFrame {
         JScrollPane scrollPane = new JScrollPane(txtMessage);
         scrollPane.setPreferredSize(new Dimension(50, 50));
 
-        gbc.gridx = 0;
+        gbc.gridx = 1;
         gbc.gridy = 8;
-        gbc.gridwidth = 4;
+        gbc.gridwidth = 3;
         gbc.gridheight = 2;
         gbc.fill = GridBagConstraints.BOTH;
         gbc.weightx = 1.0;
@@ -244,7 +264,7 @@ public class Core extends JFrame {
                         progressBar.setValue(0);
                     });
 
-                    sendEmailsWithThrottling(session, email, recipients, subject, messageBody, 5000);
+                    sendEmailsWithThrottling(session, email, recipients, subject, messageBody, 10000);
 
                     SwingUtilities.invokeLater(() -> {
                         if (!recipients.isEmpty()) {
@@ -255,17 +275,24 @@ public class Core extends JFrame {
                         progressBar.setValue(0);
                     });
                 } catch (Exception ex) {
-                    ex.printStackTrace();
-                    SwingUtilities.invokeLater(() -> showErrorDialog(ex));
+                    ex.printStackTrace();  // Log the exception (optional)
+                    SwingUtilities.invokeLater(() -> showErrorDialog(ex));  // Show the error dialog and stop the program
                 }
             }).start();
         });
+
 
         btnAddAccount.addActionListener(e -> saveEmailAccount());
 
         btnRemoveAccount.addActionListener(e -> removeEmailAccount());
 
         cmbSavedEmails.addActionListener(e -> loadSelectedEmailAccount());
+
+        btnAddMessage.addActionListener(e -> addMessage());
+
+        btnRemoveMessage.addActionListener(e -> removeMessage());
+
+        cmbSavedMessages.addActionListener(e -> loadSelectedMessage());
 
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
@@ -446,8 +473,6 @@ public class Core extends JFrame {
             SwingUtilities.invokeLater(() -> {
                 JOptionPane.showMessageDialog(null, "Max authentication attempts reached. The program will now exit.", "Authentication Failed", JOptionPane.ERROR_MESSAGE);
             });
-            // Terminate the program
-            System.exit(1);
             return;
         }
     }
@@ -542,7 +567,7 @@ public class Core extends JFrame {
     private void loadSavedEmails() {
         try {
             for (String key : preferences.keys()) {
-                if (!key.equals(PREF_MESSAGE_SUBJECT) && !key.equals(PREF_MESSAGE_BODY)) {
+                if (!key.equals("last_message")) {
                     cmbSavedEmails.addItem(key);
                 }
             }
@@ -551,30 +576,62 @@ public class Core extends JFrame {
         }
     }
 
-    private void saveMessageContent() {
-        preferences.put(PREF_MESSAGE_SUBJECT, txtSubject.getText());
-        preferences.put(PREF_MESSAGE_BODY, txtMessage.getText());
+    private void loadSavedMessages() {
+        try {
+            for (String key : preferences.keys()) {
+                if (!key.equals("last_message") && !key.contains("@")) { // Avoid loading email keys
+                    cmbSavedMessages.addItem(key);
+                }
+            }
+        } catch (BackingStoreException e) {
+            e.printStackTrace();
+        }
     }
 
-    private void loadMessageContent() {
-        txtSubject.setText(preferences.get(PREF_MESSAGE_SUBJECT, ""));
-        txtMessage.setText(preferences.get(PREF_MESSAGE_BODY, ""));
+    private void loadSelectedMessage() {
+        String selectedMessage = (String) cmbSavedMessages.getSelectedItem();
+        if (selectedMessage != null) {
+            txtMessage.setText(preferences.get(selectedMessage, ""));
+            txtSubject.setText(selectedMessage);
+        }
     }
 
-    private void showErrorDialog(Throwable throwable) {
-        JDialog dialog = new JDialog(this, "Problem", true);
-        dialog.setSize(500, 300);
-        dialog.setLocationRelativeTo(this);
+    private void addMessage() {
+        JPanel panel = new JPanel(new BorderLayout(5, 5));
+        JTextField subjectField = new JTextField(20);
+        JTextArea messageField = new JTextArea(10, 20);
+        messageField.setLineWrap(true);
+        messageField.setWrapStyleWord(true);
+        panel.add(new JLabel("Subjekt poruke:"), BorderLayout.NORTH);
+        panel.add(subjectField, BorderLayout.NORTH);
+        panel.add(new JLabel("Sadrzaj poruke:"), BorderLayout.CENTER);
+        panel.add(new JScrollPane(messageField), BorderLayout.CENTER);
 
-        JTextArea textArea = new JTextArea();
-        textArea.setEditable(false);
-        StringWriter sw = new StringWriter();
-        PrintWriter pw = new PrintWriter(sw);
-        throwable.printStackTrace(pw);
-        textArea.setText(sw.toString());
+        int result = JOptionPane.showConfirmDialog(this, panel, "Dodaj Poruku", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result == JOptionPane.OK_OPTION) {
+            String newMessageName = subjectField.getText().trim();
+            String newMessageBody = messageField.getText().trim();
+            if (!newMessageName.isEmpty()) {
+                preferences.put(newMessageName, newMessageBody);
+                cmbSavedMessages.addItem(newMessageName);
+                JOptionPane.showMessageDialog(this, "Poruka spremljena.", "Uspjeh", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this, "Naziv poruke ne može biti prazan.", "Greška", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
 
-        dialog.add(new JScrollPane(textArea));
-        dialog.setVisible(true);
+    private void removeMessage() {
+        String selectedMessage = (String) cmbSavedMessages.getSelectedItem();
+        if (selectedMessage != null) {
+            preferences.remove(selectedMessage);
+            cmbSavedMessages.removeItem(selectedMessage);
+            txtSubject.setText("");
+            txtMessage.setText("");
+            JOptionPane.showMessageDialog(this, "Poruka uklonjena.", "Uspjeh", JOptionPane.INFORMATION_MESSAGE);
+        } else {
+            JOptionPane.showMessageDialog(this, "Nema poruke za ukloniti.", "Greška", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void showSentEmailsDialog(List<String> sentEmails) {
@@ -593,6 +650,50 @@ public class Core extends JFrame {
 
         frame.add(new JScrollPane(textArea));
         frame.setVisible(true);
+    }
+
+    private void showErrorDialog(Throwable throwable) {
+        // Create a modal dialog to display the error
+        JDialog dialog = new JDialog(this, "Problem", true);
+        dialog.setSize(500, 300);
+        dialog.setLocationRelativeTo(this);
+
+        // Create a text area to display the error message and stack trace
+        JTextArea textArea = new JTextArea();
+        textArea.setEditable(false);
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        throwable.printStackTrace(pw);
+        textArea.setText(sw.toString());
+
+        // Add the text area to a scroll pane in the dialog
+        dialog.add(new JScrollPane(textArea));
+
+        // Add a button to close the dialog and terminate the program
+        JButton closeButton = new JButton("Close");
+        closeButton.addActionListener(e -> {
+            dialog.dispose();
+            System.exit(1);  // Exit the application with a status code of 1 (indicating an error)
+        });
+
+        // Add the button to the dialog
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.add(closeButton);
+        dialog.add(buttonPanel, BorderLayout.SOUTH);
+
+        // Show the dialog
+        dialog.setVisible(true);
+    }
+
+
+    private void saveMessageContent() {
+        String lastSubject = txtSubject.getText();
+        String lastMessage = txtMessage.getText();
+
+        if (!lastSubject.isEmpty()) {
+            preferences.put("last_message_subject", lastSubject);
+            preferences.put("last_message_body", lastMessage);
+        }
     }
 
     public static void main(String[] args) {
