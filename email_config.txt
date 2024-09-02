@@ -1,0 +1,5 @@
+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
+mdujma99@gmail.com
+/Users/marindujmovic/Desktop/Addresses.txt
+Automaic mail test - Twilio
+This is a test message trying to be sent using SendGrid API.
