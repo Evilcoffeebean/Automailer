@@ -95,8 +95,6 @@ public class Core extends JFrame {
         add(messageLabel, gbc);
 
         messageContentArea = new JTextArea(10, 30);
-        messageContentArea.setTransferHandler(new FileDropHandler());
-        messageContentArea.setDragEnabled(true);
         messageContentArea.setLineWrap(true);
         messageContentArea.setWrapStyleWord(true);
         gbc.gridx = 1;
@@ -129,6 +127,9 @@ public class Core extends JFrame {
                 saveConfig();
             }
         });
+
+        // Set plain text transfer handler
+        messageContentArea.setTransferHandler(new PlainTextTransferHandler());
 
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
@@ -254,40 +255,35 @@ public class Core extends JFrame {
         }
     }
 
-    private class FileDropHandler extends TransferHandler {
+    // Custom TransferHandler that only allows plain text
+    private class PlainTextTransferHandler extends TransferHandler {
         @Override
-        public boolean canImport(TransferHandler.TransferSupport support) {
-            if (!support.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
-                return false;
-            }
-            boolean copySupported = (COPY & support.getSourceDropActions()) == COPY;
-            if (!copySupported) {
-                return false;
-            }
-            support.setDropAction(COPY);
-            return true;
+        public boolean canImport(TransferSupport support) {
+            return support.isDataFlavorSupported(DataFlavor.stringFlavor);
         }
 
         @Override
-        public boolean importData(TransferHandler.TransferSupport support) {
+        public boolean importData(TransferSupport support) {
             if (!canImport(support)) {
                 return false;
             }
 
             try {
-                Transferable transferable = support.getTransferable();
-                List<File> droppedFiles = (List<File>) transferable.getTransferData(DataFlavor.javaFileListFlavor);
-                for (File file : droppedFiles) {
-                    if (file.isFile()) {
-                        attachedFiles.add(file);
-                        messageContentArea.append("\nDodano: " + file.getName());
-                    }
-                }
+                // Get the plain text from the clipboard
+                String data = (String) support.getTransferable().getTransferData(DataFlavor.stringFlavor);
+                // Append the plain text to the message content area
+                messageContentArea.append(data);
                 return true;
             } catch (Exception ex) {
                 ex.printStackTrace();
             }
             return false;
+        }
+
+        @Override
+        public void exportToClipboard(JComponent comp, Clipboard clipboard, int action) throws IllegalStateException {
+            StringSelection selection = new StringSelection(messageContentArea.getSelectedText());
+            clipboard.setContents(selection, null);
         }
     }
 
