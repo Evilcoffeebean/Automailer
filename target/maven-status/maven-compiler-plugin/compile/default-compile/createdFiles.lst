@@ -1,4 +1,6 @@
-dev/automailer/com/Core$PlainTextTransferHandler.class
-dev/automailer/com/Core$1.class
-dev/automailer/com/Core$2.class
-dev/automailer/com/Core.class
+dev\automailer\com\Core$2.class
+dev\automailer\com\TemplateManagerDialog.class
+dev\automailer\com\EmailTemplate.class
+dev\automailer\com\Core.class
+dev\automailer\com\PlainTextTransferHandler.class
+dev\automailer\com\Core$1.class
